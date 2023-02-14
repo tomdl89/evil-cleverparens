@@ -627,24 +627,106 @@ and string delimiters."
              (<= (point) (line-end-position)))
     (forward-char)))
 
-(defun evil-cp--act-until-closing (beg action)
-  "Do ACTION on all balanced expressions, starting at BEG.
-Stop ACTION when the first unbalanced closing delimeter or eol is reached."
-  (goto-char beg)
-  (let ((endp nil))
-    (while (not endp)
+(defcustom evil-cleverparens-delete-strategy 'evil-cp--delete-movement-lazy
+  "Strategy used to calculate what to delete when an unbalanced range is given.
+For all options, to maintain balance, delimeters are only ever deleted in pairs."
+  :type '(radio (function-item :tag "Conservative" evil-cp--delete-movement-conservative)
+                (function-item :tag "Lazy" evil-cp--delete-movement-lazy)
+                (function-item :tag "Greedy" evil-cp--delete-movement-greedy))
+  :group 'evil-cleverparens)
+
+(defun evil-cp--delete-movement-conservative (beg end)
+  "Move from BEG to END for deletion, conservatively.
+Starting at BEG, repeatedly move in the direction of END.
+Conservative means move past a delimeter only if
+its matching delimiter has been seen, or is found before END."
+  (let ((forwardp (< beg end)) (backwardp (< end beg))
+        donep)
+    (while (not donep)
       (cond
-       ((evil-cp--looking-at-any-opening-p)
-        (let ((other-end (evil-cp--matching-paren-pos)))
-          ;; matching paren is in the range of the command
-          (let ((char-count
-                 (evil-cp--guard-point
-                  (sp-get (sp-get-enclosing-sexp)
-                    (- :end :beg)))))
-            (funcall action char-count))))
-       ((or (eolp) (evil-cp--looking-at-any-closing-p))
-        (setq endp t))
-       (t (funcall action 1))))))
+       ;; If we reach the end, we're done
+       ((= end (point)) (setq donep t))
+       ;; Skip forms wholly contained in range, otherwise stop
+       ((or (and forwardp (evil-cp--looking-at-any-opening-p))
+            (and backwardp (evil-cp--looking-at-any-closing-p)))
+        (let ((matching-pos (evil-cp--matching-paren-pos)))
+          (cond ((not matching-pos) (setq donep t))
+                ((and forwardp (< matching-pos end))
+                 (goto-char matching-pos)
+                 (unless (eobp) (forward-char)))
+                ((and backwardp (< end matching-pos))
+                 (goto-char matching-pos)
+                 (unless (bobp) (backward-char)))
+                (t (setq donep t)))))
+       ;; Stop at any delimeter where we haven't seen its match
+       ((or (and forwardp (evil-cp--looking-at-any-closing-p))
+            (and backwardp (evil-cp--looking-at-any-opening-p)))
+        (setq donep t))
+       ;; Otherwise move on by one char
+       (forwardp (forward-char))
+       (backwardp (backward-char))
+       ;; Safeguard against a range of 0
+       (t (setq donep t))))))
+
+(defun evil-cp--delete-movement-lazy (beg end)
+  "Move from BEG to END for deletion, lazily.
+Starting at BEG, repeatedly move in the direction of END.
+Lazy means never go further than END."
+  (let ((forwardp (< beg end)) (backwardp (< end beg))
+        donep)
+    (while (not donep)
+      (cond
+       ;; If we reach the end, we're done
+       ((= end (point)) (setq donep t))
+       ;; Skip forms wholly contained in range, otherwise goto end
+       ((or (and forwardp (evil-cp--looking-at-any-opening-p))
+            (and backwardp (evil-cp--looking-at-any-closing-p)))
+        (let ((matching-pos (evil-cp--matching-paren-pos)))
+          (cond ((not matching-pos) (setq donep t))
+                ((and forwardp (< matching-pos end))
+                 (goto-char matching-pos)
+                 (unless (eobp) (forward-char)))
+                ((and backwardp (< end matching-pos))
+                 (goto-char matching-pos)
+                 (unless (bobp) (backward-char)))
+                (t (goto-char end)))))
+       ;; Otherwise move on by one char
+       (forwardp (forward-char))
+       (backwardp (backward-char))
+       ;; Safeguard against a range of 0
+       (t (setq donep t))))))
+
+(defun evil-cp--delete-movement-greedy (beg end)
+  "Move from BEG to END for deletion, greedily.
+Starting at BEG, repeatedly move in the direction of END.
+Greedy means keep moving until matching delimters are found for corresponding
+delimeters earlier in the movement, even on lines past END's line."
+  (let ((forwardp (< beg end)) (backwardp (< end beg))
+        donep)
+    (while (not donep)
+      (cond
+       ;; If we reach the end or go past it, we're done
+       ((or (and forwardp (<= end (point)))
+            (and backwardp (<= (point) end)))
+        (setq donep t))
+       ;; If we encounter a delimeter, always skip its form
+       ((or (and forwardp (evil-cp--looking-at-any-opening-p))
+            (and backwardp (evil-cp--looking-at-any-closing-p)))
+        (let ((matching-pos (evil-cp--matching-paren-pos)))
+          (cond ((not matching-pos) (setq donep t))
+                (forwardp
+                 (goto-char matching-pos)
+                 (unless (eobp) (forward-char)))
+                (backwardp
+                 (goto-char matching-pos)
+                 (unless (bobp) (backward-char)))
+                ;; Safeguard against a range of 0
+                (t (setq donep t)))))
+       ;; Otherwise move on by one char
+       (forwardp (forward-char))
+       (backwardp (backward-char))
+       ;; Safeguard against a range of 0
+       (t (setq donep t))))))
 
 (evil-define-operator evil-cp-delete-line (beg end type register yank-handler)
   "Kills the balanced expressions on the line until the eol."
@@ -653,12 +735,18 @@ Stop ACTION when the first unbalanced closing delimeter or eol is reached."
   :move-point nil
   ;; TODO this could take a count, like `evil-delete-line'
   (interactive "<R><x>")
-  (cond ((evil-visual-state-p)
-         ;; Not sure what this should do in visual-state
-         (let ((safep (sp-region-ok-p beg end)))
-           (if (not safep)
-               (evil-cp--fail)
-             (evil-delete-line beg end type register yank-handler))))
+  (when (and (evil-visual-state-p) (eq type 'inclusive))
+    (let ((range (evil-expand
+                  beg end
+                  (if (and evil-respect-visual-line-mode visual-line-mode)
+                      'screen-line 'line))))
+      (setq beg (car range)
+            end (cadr range)
+            type (evil-type range))))
+  (unless beg (setq beg (point)))
+  (unless end (setq end (line-end-position)))
+  (cond ((evil-cp-region-ok-p beg end)
+         (evil-delete-line beg end type register yank-handler))
 
         ((paredit-in-string-p)
          (save-excursion
@@ -675,6 +763,11 @@ Stop ACTION when the first unbalanced closing delimeter or eol is reached."
                (end (line-end-position)))
            (evil-yank-characters beg end register)
            (delete-region beg end)))
+
+        ((evil-visual-state-p)
+         (progn (evil-force-normal-state)
+                (goto-char beg)
+                (evil-cp-delete-line beg end type register yank-handler)))
 
         ((and (evil-cp--looking-at-any-closing-p)
               (evil-cp--looking-at-empty-form))
@@ -705,9 +798,13 @@ Stop ACTION when the first unbalanced closing delimeter or eol is reached."
          (save-excursion
            (when (paredit-in-char-p) (backward-char 2))
            (let* ((beg (point))
-                  (end (progn (evil-cp--act-until-closing beg #'forward-char) (point))))
+                  (end (progn (funcall evil-cleverparens-delete-strategy beg end)
+                              (point)))
+                  (joinp (when (eolp) t)))
              (evil-yank-characters beg end register)
-             (evil-cp--act-until-closing beg #'delete-char))))))
+             (evil-cp--delete-characters beg end)
+             ;; TODO - maybe remove?
+             (when joinp (join-line 1)))))))
 
 (evil-define-operator evil-cp-delete (beg end type register yank-handler)
   "A version of `evil-delete' that attempts to leave the region
@@ -780,6 +877,7 @@ kill-ring is determined by the
                     (goto-char beg)
                     (line-beginning-position))))
       (cond ((eq type 'line)
+             ;; TODO this doesn't even yank
              (save-excursion
                (evil-cp--delete-characters
                 (+ beg

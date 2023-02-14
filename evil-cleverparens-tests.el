@@ -16,10 +16,11 @@
 
 (defmacro evil-cp-test-buffer (&rest body)
   (declare (indent defun))
-  `(evil-test-buffer
-     ,(pop body)
-     (evil-cleverparens-mode t)
-     ,@body))
+  `(let (sp-message-width)
+     (evil-test-buffer
+      ,(pop body)
+      (evil-cleverparens-mode t)
+      ,@body)))
 
 (ert-deftest evil-cp-delete-char-or-splice-test ()
   (ert-info ("Can delete a normal character")
@@ -285,81 +286,226 @@ golf foxtrot deltahotel india"))
       ("d^")
       "(( charlie))")))
 
-
 ;; (alpha[ ]bravo) charlie
 ;; charlie (bravo[ ]alpha)
 ;; should d$ on l1 correspond with d^ on l2?
 
-(ert-deftest evil-cp-delete-line-test ()
-  (ert-info ("Can delete rest of balanced line")
-    (evil-cp-test-buffer
-      "alpha [b]ravo (charlie) delta\necho"
-      ("D")
-      "alpha[ ]\necho")
-    (evil-cp-test-buffer
-      "(alpha [b]ravo (charlie)\ndelta)"
-      ("D")
-      "(alpha[ ]\ndelta)"))
-  (ert-info ("Can delete rest of unbalanced line")
-    (evil-cp-test-buffer
-      "alpha [b]ravo (charlie\ndelta) echo\nfoxtrot"
-      ("D")
-      ("alpha [ ]echo\nfoxtrot")) ;; TODO is this desired?
-    (evil-cp-test-buffer
-      "(Test [ ]        )"
-      ("D")
-      "(Test )"))
-  (ert-info ("Can delete empty form on closing delimiter")
-    (evil-cp-test-buffer
-      "(alpha ([)] bravo)"
-      ("D")
-      "(alpha[ ]bravo)"))
-  (ert-info ("Can delete one-line comments")
-    (evil-cp-test-buffer
-      "([+] ;;This is a comment
+(ert-deftest evil-cp-delete-line-conservatively-test ()
+  (let ((evil-cleverparens-delete-strategy #'evil-cp--delete-movement-conservative))
+    (ert-info ("Can delete rest of balanced line")
+      (evil-cp-test-buffer
+        "alpha [b]ravo (charlie) delta\necho"
+        ("D")
+        "alpha[ ]\necho")
+      (evil-cp-test-buffer
+        "(alpha [b]ravo (charlie)\ndelta)"
+        ("D")
+        "(alpha[ ]\ndelta)"))
+    (ert-info ("Can delete rest of unbalanced line")
+      (evil-cp-test-buffer
+        "alpha [b]ravo (charlie\ndelta) echo\nfoxtrot"
+        ("D")
+        "alpha [(]charlie\ndelta) echo\nfoxtrot")
+      (evil-cp-test-buffer
+        "(Test [ ]        )"
+        ("D")
+        "(Test [)]"))
+    (ert-info ("Can delete empty form on closing delimiter")
+      (evil-cp-test-buffer
+        "(alpha ([)] bravo)"
+        ("D")
+        "(alpha[ ]bravo)"))
+    (ert-info ("Can delete one-line comments")
+      (evil-cp-test-buffer
+        "([+] ;;This is a comment
 1
 1)"
-      ("D")
-      "(
+        ("D")
+        "(
 1
 1)"))
-  (ert-info ("Can delete entire form spanning more lines")
-    (evil-cp-test-buffer
-      "[(]let [foo (bar baz)
+    (ert-info ("Doesn't delete entire form if spanning more lines")
+      (evil-cp-test-buffer
+        "[(]let [foo (bar baz)
            qux 1
            quux (+ 1 2)]
        (dwim foo qux quux))"
-      ("D")
-      ""))
-  (ert-info ("Preserves delimeters when inside them")
-    (evil-cp-test-buffer
-      "(foo \"[b]ar baz\"
+        ("D")
+        "[(]let [foo (bar baz)
+           qux 1
+           quux (+ 1 2)]
+       (dwim foo qux quux))"))
+    (ert-info ("Preserves delimeters when inside them")
+      (evil-cp-test-buffer
+        "(foo \"[b]ar baz\"
            quux)"
-      ("D")
-      "(foo \"\"
+        ("D")
+        "(foo \"[\"]
            quux)")
-    (evil-cp-test-buffer
-      "(alpha {bravo[ ]charlie}
+      (evil-cp-test-buffer
+        "(alpha {bravo[ ]charlie}
            delta)"
-      ("D")
-      "(alpha {bravo}
+        ("D")
+        "(alpha {bravo[}]
            delta)")
-    (evil-cp-test-buffer
-      "(alpha ${bravo[ ]charlie}
+      (evil-cp-test-buffer
+        "(alpha ${bravo[ ]charlie}
            delta)"
-      ("D")
-      "(alpha ${bravo}
+        ("D")
+        "(alpha ${bravo[}]
            delta)"))
-  (ert-info ("Preserves rest of line outside the current form")
-    (evil-cp-test-buffer
-      "([f]oo bar)     ; Important comment"
-      ("D")
-      "([)]     ; Important comment"))
-  (ert-info ("Can delete rest of unbalanced line in visual state")
-    (evil-cp-test-buffer
-      "alpha <brav[o]> (charlie\ndelta) echo\nfoxtrot"
-      ("D")
-      "[d]elta) echo\nfoxtrot"))) ;; TODO surely not desired?
+    (ert-info ("Preserves rest of line outside the current form")
+      (evil-cp-test-buffer
+        "([f]oo bar)     ; Important comment"
+        ("D")
+        "([)]     ; Important comment"))
+    (ert-info ("Can delete rest of unbalanced line in visual state")
+      (evil-cp-test-buffer
+        "alpha <brav[o]> (charlie\ndelta) echo\nfoxtrot"
+        ("D")
+        "[(]charlie\ndelta) echo\nfoxtrot"))))
+
+(ert-deftest evil-cp-delete-line-lazily-test ()
+  (let ((evil-cleverparens-delete-strategy #'evil-cp--delete-movement-lazy))
+    (ert-info ("Can delete rest of balanced line")
+      (evil-cp-test-buffer
+        "alpha [b]ravo (charlie) delta\necho"
+        ("D")
+        "alpha[ ]\necho")
+      (evil-cp-test-buffer
+        "(alpha [b]ravo (charlie)\ndelta)"
+        ("D")
+        "(alpha[ ]\ndelta)"))
+    (ert-info ("Can delete rest of unbalanced line")
+      (evil-cp-test-buffer
+        "alpha [b]ravo (charlie\ndelta) echo\nfoxtrot"
+        ("D")
+        "alpha [(]delta) echo\nfoxtrot")
+      (evil-cp-test-buffer
+        "(Test [ ]        )"
+        ("D")
+        "(Test [)]"))
+    (ert-info ("Can delete empty form on closing delimiter")
+      (evil-cp-test-buffer
+        "(alpha ([)] bravo)"
+        ("D")
+        "(alpha[ ]bravo)"))
+    (ert-info ("Can delete one-line comments")
+      (evil-cp-test-buffer
+        "([+] ;;This is a comment
+1
+1)"
+        ("D")
+        "(
+1
+1)"))
+    (ert-info ("Deletes all non-delimiters on line")
+      (evil-cp-test-buffer
+        "[(]let [foo (bar baz)
+           qux 1
+           quux (+ 1 2)]
+       (dwim foo qux quux))"
+        ("D")
+        "([qux 1
+           quux (+ 1 2)]
+       (dwim foo qux quux))"))
+    (ert-info ("Preserves delimeters when inside them")
+      (evil-cp-test-buffer
+        "(foo \"[b]ar baz\"
+           quux)"
+        ("D")
+        "(foo \"\"
+           quux)")
+      (evil-cp-test-buffer
+        "(alpha {bravo[ ]charlie}
+           delta)"
+        ("D")
+        "(alpha {bravo} delta)")
+      (evil-cp-test-buffer
+        "(alpha ${bravo[ ]charlie}
+           delta)"
+        ("D")
+        "(alpha ${bravo} delta)"))
+    (ert-info ("Deletes rest of line outside the current form")
+      (evil-cp-test-buffer
+        "([f]oo bar)     ; A comment"
+        ("D")
+        "([)]"))
+    (ert-info ("Can delete rest of unbalanced line in visual state")
+      (evil-cp-test-buffer
+        "alpha <brav[o]> (charlie\ndelta) echo\nfoxtrot"
+        ("D")
+        "[(]delta) echo\nfoxtrot"))))
+
+(ert-deftest evil-cp-delete-line-greedily-test ()
+  (let ((evil-cleverparens-delete-strategy #'evil-cp--delete-movement-greedy))
+    (ert-info ("Can delete rest of balanced line")
+      (evil-cp-test-buffer
+        "alpha [b]ravo (charlie) delta\necho"
+        ("D")
+        "alpha[ ]\necho")
+      (evil-cp-test-buffer
+        "(alpha [b]ravo (charlie)\ndelta)"
+        ("D")
+        "(alpha[ ]\ndelta)"))
+    (ert-info ("Can delete rest of unbalanced line")
+      (evil-cp-test-buffer
+        "alpha [b]ravo (charlie\ndelta) echo\nfoxtrot"
+        ("D")
+        "alpha [ ]echo\nfoxtrot")
+      (evil-cp-test-buffer
+        "(Test [ ]        )"
+        ("D")
+        "(Test [)]"))
+    (ert-info ("Can delete empty form on closing delimiter")
+      (evil-cp-test-buffer
+        "(alpha ([)] bravo)"
+        ("D")
+        "(alpha[ ]bravo)"))
+    (ert-info ("Can delete one-line comments")
+      (evil-cp-test-buffer
+        "([+] ;;This is a comment
+1
+1)"
+        ("D")
+        "(
+1
+1)"))
+    (ert-info ("Deletes all non-delimiters on line")
+      (evil-cp-test-buffer
+        "[(]let [foo (bar baz)
+           qux 1
+           quux (+ 1 2)]
+       (dwim foo qux quux))"
+        ("D")
+        ""))
+    (ert-info ("Preserves delimeters when inside them")
+      (evil-cp-test-buffer
+        "(foo \"[b]ar baz\"
+           quux)"
+        ("D")
+        "(foo \"\"
+           quux)")
+      (evil-cp-test-buffer
+        "(alpha {bravo[ ]charlie}
+           delta)"
+        ("D")
+        "(alpha {bravo} delta)")
+      (evil-cp-test-buffer
+        "(alpha ${bravo[ ]charlie}
+           delta)"
+        ("D")
+        "(alpha ${bravo} delta)"))
+    (ert-info ("Deletes rest of line outside the current form")
+      (evil-cp-test-buffer
+        "([f]oo bar)     ; A comment"
+        ("D")
+        "([)]"))
+    (ert-info ("Can delete rest of unbalanced line in visual state")
+      (evil-cp-test-buffer
+        "alpha <brav[o]> (charlie\ndelta) echo\nfoxtrot"
+        ("D")
+        "[ ]echo\nfoxtrot"))))
 
 (ert-deftest evil-cp-change-test ()
   (ert-info ("Can change word and keep spacing")
@@ -420,7 +566,30 @@ golf foxtrot deltahotel india"))
   (alpha[]
     (concat foo asdf)))")))
 
-(ert-deftest evil-cp-change-line-test ()
+(ert-deftest evil-cp-change-line-conservatively-test ()
+  (let ((evil-cleverparens-delete-strategy #'evil-cp--delete-movement-conservative))
+    (ert-info ("Can change rest of balanced line")
+      (evil-cp-test-buffer
+        "alpha [b]ravo (charlie) delta\necho"
+        ("C" "zulu")
+        "alpha zulu\necho"))
+    (ert-info ("Can change rest of unbalanced line")
+      (evil-cp-test-buffer
+        "alpha [b]ravo (charlie\ndelta) echo\nfoxtrot"
+        ("C" "zulu ")
+        "alpha zulu (charlie\ndelta) echo\nfoxtrot"))
+    (ert-info ("Changes whole line when balanced line in visual state")
+      (evil-cp-test-buffer
+        "alpha <brav[o]> (charlie delta)\necho"
+        ("C" "zulu ")
+        "zulu echo")) ;; TODO should not join
+    (ert-info ("Changes whole line when unbalanced line in visual state")
+      (evil-cp-test-buffer
+        "alpha <brav[o]> (charlie\ndelta) echo\nfoxtrot"
+        ("C" "zulu ")
+        "zulu (charlie\ndelta) echo\nfoxtrot"))))
+
+(ert-deftest evil-cp-change-line-lazily-test ()
   (ert-info ("Can change rest of balanced line")
     (evil-cp-test-buffer
       "alpha [b]ravo (charlie) delta\necho"
@@ -429,18 +598,41 @@ golf foxtrot deltahotel india"))
   (ert-info ("Can change rest of unbalanced line")
     (evil-cp-test-buffer
       "alpha [b]ravo (charlie\ndelta) echo\nfoxtrot"
-      ("C" "zulu")
-      ("alpha zulu echo\nfoxtrot")))
+      ("C" "zulu ")
+      "alpha zulu (delta) echo\nfoxtrot"))
   (ert-info ("Changes whole line when balanced line in visual state")
     (evil-cp-test-buffer
       "alpha <brav[o]> (charlie delta)\necho"
-      ("C" "zulu")
-      "zuluecho")) ;; TODO definitely not desired (should act like evil C)
+      ("C" "zulu ")
+      "zulu echo")) ;; TODO should not join
   (ert-info ("Changes whole line when unbalanced line in visual state")
     (evil-cp-test-buffer
       "alpha <brav[o]> (charlie\ndelta) echo\nfoxtrot"
-      ("C" "zulu")
-      "zuludelta) echo\nfoxtrot"))) ;; TODO surely not desired?
+      ("C" "zulu ")
+      "zulu (delta) echo\nfoxtrot")))
+
+(ert-deftest evil-cp-change-line-greedily-test ()
+  (let ((evil-cleverparens-delete-strategy #'evil-cp--delete-movement-greedy))
+    (ert-info ("Can change rest of balanced line")
+      (evil-cp-test-buffer
+        "alpha [b]ravo (charlie) delta\necho"
+        ("C" "zulu")
+        "alpha zulu\necho"))
+    (ert-info ("Can change rest of unbalanced line")
+      (evil-cp-test-buffer
+        "alpha [b]ravo (charlie\ndelta) echo\nfoxtrot"
+        ("C" "zulu")
+        "alpha zulu echo\nfoxtrot"))
+    (ert-info ("Changes whole line when balanced line in visual state")
+      (evil-cp-test-buffer
+        "alpha <brav[o]> (charlie delta)\necho"
+        ("C" "zulu ")
+        "zulu echo")) ;; TODO should not join
+    (ert-info ("Changes whole line when unbalanced line in visual state")
+      (evil-cp-test-buffer
+        "alpha <brav[o]> (charlie\ndelta) echo\nfoxtrot"
+        ("C" "zulu")
+        "zulu echo\nfoxtrot"))))
 
 (ert-deftest evil-cp-change-whole-line-test ()
   (ert-info ("Can change whole line when balanced")
