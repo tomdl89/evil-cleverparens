@@ -675,10 +675,11 @@ golf foxtrot deltahotel india"))
       ("<")
       "alpha bravo (cha[r]lie) delta echo"))
   (ert-info ("Stay on closing paren when barfing from it")
-    (evil-cp-test-buffer
-      "(alpha)\n(bravo charlie delta[)]"
-      ("<")
-      "(alpha)\n(bravo charlie[)] delta")))
+    (let ((sp-barf-move-point-with-delimiter t))
+      (evil-cp-test-buffer
+        "(alpha)\n(bravo charlie delta[)]"
+        ("<")
+        "(alpha)\n(bravo charlie[)] delta"))))
 
 (ert-deftest evil-cp->-test ()
   (ert-info ("Can do regular forward slurp")
