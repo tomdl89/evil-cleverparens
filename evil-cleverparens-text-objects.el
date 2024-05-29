@@ -1,4 +1,4 @@
-;;; evil-cleverparens-text-objects.el --- Text Objects for evil-cleverparens.
+;;; evil-cleverparens-text-objects.el --- Text Objects for evil-cleverparens -*- lexical-binding: t -*-
 ;;
 ;; Copyright (C) 2015 Olli Piepponen
 ;;

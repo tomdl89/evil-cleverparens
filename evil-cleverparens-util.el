@@ -1,4 +1,4 @@
-;;; evil-cleverparens-util.el --- Utility functions for evil-cleverparens
+;;; evil-cleverparens-util.el --- Utility functions for evil-cleverparens -*- lexical-binding: t -*-
 ;;
 ;; Copyright (C) 2015 Olli Piepponen
 ;;

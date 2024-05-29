@@ -1,4 +1,4 @@
-;;; evil-cleverparens.el --- Evil friendly minor-mode for editing lisp.
+;;; evil-cleverparens.el --- Evil friendly minor-mode for editing lisp -*- lexical-binding: t -*-
 ;;
 ;; Copyright (C) 2015 Olli Piepponen
 ;;
