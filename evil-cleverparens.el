@@ -1044,7 +1044,7 @@ working. Could be used to implement a future
     (evil-forward-end thing count)))
 
 (evil-define-motion evil-cp-forward-symbol-end (count)
-  "Copy of `evil-forward-word-end' using 'evil-symbol for the
+  "Copy of `evil-forward-word-end' using \\='evil-symbol for the
 movement."
   :type inclusive
   (evil-cp--forward-X-end (if evil-cleverparens-move-skip-delimiters
@@ -1053,7 +1053,7 @@ movement."
                           (or count 1)))
 
 (evil-define-motion evil-cp-backward-symbol-begin (count)
-  "Copy of `evil-backward-word-begin' using 'evil-symbol for the
+  "Copy of `evil-backward-word-begin' using \\='evil-symbol for the
 movement."
   :type exclusive
   (let ((thing (if evil-cleverparens-move-skip-delimiters
@@ -1063,7 +1063,7 @@ movement."
     (evil-backward-beginning thing count)))
 
 (evil-define-motion evil-cp-backward-symbol-end (count)
-  "Copy of `evil-backward-word-end' using 'evil-symbol for the
+  "Copy of `evil-backward-word-end' using \\='evil-symbol for the
 movement."
   :type inclusive
   (let ((thing (if evil-cleverparens-move-skip-delimiters
@@ -1092,7 +1092,7 @@ movement."
       (dotimes (_ depth)
         (sp-backward-slurp-sexp))
       (while (looking-back " " (1- (point)))
-        (backward-delete-char 1))
+        (delete-char -1))
       (insert " ")
       (backward-sexp)
       (backward-char)

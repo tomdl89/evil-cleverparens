@@ -24,6 +24,8 @@
 (require 'smartparens)
 (require 'evil-cleverparens-util)
 
+;; Best to leave the definition in evil-cleverparens, but should declare here
+(defvar evil-cleverparens-swap-move-by-word-and-symbol)
 
 ;;;###autoload (autoload 'evil-cp-a-WORD "evil-cleverparens-text-objects" nil t)
 (evil-define-text-object evil-cp-a-WORD (count &optional beg end type)
