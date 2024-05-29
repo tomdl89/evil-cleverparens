@@ -1166,7 +1166,7 @@ regular forward-barf."
         (when (not (sp-point-in-empty-sexp))
           (when (not (evil-cp--singleton-list-p))
             (let (sp-barf-move-point-with-delimiter) ; It's not helpful here
-              ;; (declare (special sp-barf-move-point-with-delimiter))
+              (declare (special sp-barf-move-point-with-delimiter))
               (sp-forward-barf-sexp))
             (sp-backward-sexp)
             (evil-cp-previous-closing))))
@@ -1212,9 +1212,7 @@ regular forward-slurp."
         (when (not (or (evil-cp--looking-at-empty-form)
                        (evil-cp--singleton-list-p)))
           (forward-char)
-          (let (sp-barf-move-point-with-delimiter) ; It's not helpful here
-            ;; (declare (special sp-barf-move-point-with-delimiter))
-            (sp-backward-barf-sexp))
+          (sp-backward-barf-sexp)
           (sp-forward-sexp)
           (evil-cp-next-opening)))
        (t
@@ -2112,6 +2110,8 @@ and/or beginning."
 (defvar evil-cp-append-key "a"
   "Key to use to switch to append mode")
 
+(defvar evil-cleverparens-mode-map (make-sparse-keymap))
+
 (defun evil-cp--populate-mode-bindings-for-state (bindings state addp)
   "Helper function that defines BINDINGS for the evil-state
 STATE when ADDP is true. If ADDP is false, then the keys in
@@ -2214,7 +2214,6 @@ true."
     (add-to-list 'evil-surround-operator-alist '(evil-cp-change . change))))
 
 ;; Setup keymap
-(defvar evil-cleverparens-mode-map (make-sparse-keymap))
 (evil-cp-set-movement-keys)
 (evil-cp--enable-regular-bindings)
 (evil-cp-set-additional-bindings)
