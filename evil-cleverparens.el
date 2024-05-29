@@ -1603,7 +1603,6 @@ in `evil-open-below'."
     (let* ((beg       (point))
            (end       (point))
            (enc-range (evil-cp--get-enclosing-bounds))
-           (e-beg     (or (car enc-range) (point)))
            (e-end     (or (cdr enc-range) (point)))
            (n         (or count 1))
            (ok        t))
@@ -2119,7 +2118,7 @@ STATE when ADDP is true. If ADDP is false, then the keys in
 BINDINGS are set to nil instead, effectively disabling the keys
 in question."
   (dolist (binding bindings)
-    (evil-define-key state evil-cleverparens-mode-map
+    (evil-define-key* state evil-cleverparens-mode-map
       (read-kbd-macro (car binding))
       (if addp (cdr binding) nil))))
 
