@@ -314,13 +314,12 @@ beginning."
   "Predicate for checking if a region contains an unbalanced string."
   (not (cl-evenp (count-matches (sp--get-stringlike-regexp) beg end))))
 
+;; TODO add an `add-parens-p' param to handle missing parens
 (defun evil-cp--yank-characters
-    (beg end &optional register yank-handler add-parens-p)
-  "Yank characters while keeping parentheses balanced. The
-optional ADD-PARENS-P arg determines how to handle the missing
-parentheses: if nil, the non-balanced parens are
-ignored. Otherwise they are added to the start/beginning of the
-region."
+    (beg end &optional register yank-handler)
+  "Yank characters while keeping parentheses balanced.
+Yank within range BEG to END and yank into REGISTER.  Propertize text with
+YANK-HANDLER if supplied."
   (unless (evil-cp--region-has-unbalanced-string-p beg end)
     (let ((text (string-trim (filter-buffer-substring beg end))))
       (when (not (evil-cp--text-balanced-p text))
@@ -639,13 +638,12 @@ Stop ACTION when the first unbalanced closing delimeter or eol is reached."
       (cond
        ((<= end (point)) (setq endp t))
        ((evil-cp--looking-at-any-opening-p)
-        (let ((other-end (evil-cp--matching-paren-pos)))
-          ;; matching paren is in the range of the command
-          (let ((char-count
-                 (evil-cp--guard-point
-                  (sp-get (sp-get-enclosing-sexp)
-                    (- :end :beg)))))
-            (funcall action char-count))))
+        ;; matching paren is in the range of the command
+        (let ((char-count
+               (evil-cp--guard-point
+                (sp-get (sp-get-enclosing-sexp)
+                  (- :end :beg)))))
+          (funcall action char-count)))
        ((evil-cp--looking-at-any-closing-p)
         (setq endp t))
        (t (funcall action 1))))
@@ -791,10 +789,7 @@ kill-ring is determined by the
       (evil-change beg end type register yank-handler delete-func)
     (let ((delete-func (or delete-func #'evil-cp-delete))
           (nlines (1+ (- (line-number-at-pos end)
-                         (line-number-at-pos beg))))
-          (opoint (save-excursion
-                    (goto-char beg)
-                    (line-beginning-position))))
+                         (line-number-at-pos beg)))))
       (cond ((eq type 'line)
              (save-excursion
                (evil-cp--delete-characters
@@ -1171,6 +1166,7 @@ regular forward-barf."
         (when (not (sp-point-in-empty-sexp))
           (when (not (evil-cp--singleton-list-p))
             (let (sp-barf-move-point-with-delimiter) ; It's not helpful here
+              ;; (declare (special sp-barf-move-point-with-delimiter))
               (sp-forward-barf-sexp))
             (sp-backward-sexp)
             (evil-cp-previous-closing))))
@@ -1217,6 +1213,7 @@ regular forward-slurp."
                        (evil-cp--singleton-list-p)))
           (forward-char)
           (let (sp-barf-move-point-with-delimiter) ; It's not helpful here
+            ;; (declare (special sp-barf-move-point-with-delimiter))
             (sp-backward-barf-sexp))
           (sp-forward-sexp)
           (evil-cp-next-opening)))
@@ -1638,7 +1635,7 @@ to the end of the the current form."
     (let* ((range (evil-cp--kill-sexp-range count))
            (beg (car range))
            (end (cdr range)))
-      (evil-yank-characters (car range) (cdr range) register))))
+      (evil-yank-characters beg end register))))
 
 (evil-define-command evil-cp-delete-sexp (count &optional register)
   "Kills COUNT many sexps from point. Essentially a less greedy
@@ -1928,7 +1925,8 @@ how many times the \\[universal-argument] was invoked."
     (evil-cp--wrap-previous "{" count)))
 
 
-(defun evil-cp-insert (count &optional vcount skip-empty-lines)
+;; TODO support `vcount' & `skip-empty-lines' params
+(defun evil-cp-insert (count)
   "Like `evil-insert', but tries to be helpful by automatically
 inserting a space in situations where the need for it is highly
 likely, and cleaning after itself in the case where the space
@@ -1960,7 +1958,8 @@ to true."
    (t
     (call-interactively 'evil-insert))))
 
-(defun evil-cp-append (count &optional vcount skip-empty-lines)
+;; TODO support `vcount' & `skip-empty-lines' params
+(defun evil-cp-append (count)
   "Like `evil-append', but tries to be helpful by automatically
 inserting a space in situations where the need for it is highly
 likely, and cleaning after itself in the case where the space
@@ -2119,10 +2118,10 @@ and/or beginning."
 STATE when ADDP is true. If ADDP is false, then the keys in
 BINDINGS are set to nil instead, effectively disabling the keys
 in question."
-  (--each bindings
+  (dolist (binding bindings)
     (evil-define-key state evil-cleverparens-mode-map
-      (read-kbd-macro (car it))
-      (if addp (cdr it) nil))))
+      (read-kbd-macro (car binding))
+      (if addp (cdr binding) nil))))
 
 ;;;###autoload
 (defun evil-cp-set-movement-keys ()

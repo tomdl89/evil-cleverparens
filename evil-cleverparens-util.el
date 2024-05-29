@@ -377,6 +377,7 @@ located. Also works for strings. Takes an optional POS argument
 for temporarily moving the point to before proceeding.
   Assumes that the parentheses in the buffer are balanced."
   (save-excursion
+    (when pos (goto-char pos))
     (cond ((evil-cp--looking-at-opening-p)
            (progn
              (sp-forward-sexp 1)
